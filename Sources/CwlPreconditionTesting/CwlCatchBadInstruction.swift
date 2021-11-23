@@ -18,7 +18,7 @@
 //  IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 //
 
-#if (os(macOS) || os(iOS)) && arch(x86_64)
+#if (os(macOS) || os(iOS)) && arch(arm64) || arch(x86_64)
 
 import CwlCatchException
 import Foundation
@@ -178,11 +178,19 @@ public func catchBadInstruction(in block: @escaping () -> Void) -> BadInstructio
 			// 2. Configure the mach port
 			mach_port_insert_right(mach_task_self_, context.currentExceptionPort, context.currentExceptionPort, MACH_MSG_TYPE_MAKE_SEND)
 		}
+
+		#if arch(arm64)
+		let new_flavor: thread_state_flavor_t = ARM_THREAD_STATE64
+		#elseif arch(x86_64)
+		let new_flavor: thread_state_flavor_t = x86_THREAD_STATE64
+		#else
+		#error("thread_state_flavor_t not supported not defined for this architecture")
+		#endif
 		
 		let currentExceptionPtr = context.currentExceptionPort
 		try kernCheck { context.withUnsafeMutablePointers { masksPtr, countPtr, portsPtr, behaviorsPtr, flavorsPtr in
 			// 3. Apply the mach port as the handler for this thread
-			thread_swap_exception_ports(mach_thread_self(), EXC_MASK_BAD_INSTRUCTION, currentExceptionPtr, Int32(bitPattern: UInt32(EXCEPTION_STATE) | MACH_EXCEPTION_CODES), x86_THREAD_STATE64, masksPtr, countPtr, portsPtr, behaviorsPtr, flavorsPtr)
+			thread_swap_exception_ports(mach_thread_self(), EXC_MASK_BAD_INSTRUCTION, currentExceptionPtr, Int32(bitPattern: UInt32(EXCEPTION_STATE) | MACH_EXCEPTION_CODES), new_flavor, masksPtr, countPtr, portsPtr, behaviorsPtr, flavorsPtr)
 		} }
 		
 		defer { context.withUnsafeMutablePointers { masksPtr, countPtr, portsPtr, behaviorsPtr, flavorsPtr in
